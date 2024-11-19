@@ -31,6 +31,10 @@ class Service:
         # create prompt
         prompt_str = IMG2IMG_PROMPT_TEMPLATE.substitute(text=text, image=image_path)
         prompt_json = json.loads(prompt_str)
-        return await comfy_client.queue_prompt(id, prompt_json)
+        try:
+            return await comfy_client.queue_prompt(id, prompt_json)
+        finally:
+            # clean up the input file after the prompt is queued
+            await comfy_client.clean_file(is_input=True, image_path=image_path)
 
 
