@@ -10,6 +10,7 @@ from config import COMFY_HOST, COMFY_PORT, COMFY_CLIENT_ID, CALL_BACK_BASE_URL
 from database import Record
 from database.repository import RecordRepository
 from s3 import upload_image_to_s3
+from workflows.clean_file import CLEAN_FILE_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class ComfyClient:
                             record.s3_key = s3_resp['key']
                             record = await RecordRepository.update(record)
                             await self.hook(record)
-                            # todo delete comfy image
+                            await self.clean_file(is_input=False, image_path=record.comfy_filepath)
                         else:
                             pass
                             # todo record failure locally
@@ -109,3 +110,16 @@ class ComfyClient:
             response = await client.post(uri, json=record.to_dict())
             logger.debug(f'callback response: {response.text}')
             return response.json()
+
+    async def clean_file(self, is_input: bool, image_path: str):
+        """clean input or output file from the comfy server"""
+        prompt = CLEAN_FILE_PROMPT_TEMPLATE.substitute(type='input' if is_input else 'output', path=image_path)
+        prompt_json = json.loads(prompt)
+        uri = f'http://{self.host}:{self.port}/prompt'
+        payload = {
+            'prompt': prompt_json,
+            # NOTE ignore client_id for now, in case of tracking the clean file system message
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.post(uri, json=payload)
+            logger.debug(f'clean file response: {response.text}')
