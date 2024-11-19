@@ -22,4 +22,6 @@ RDB_NAME = os.getenv("RDB_NAME", "comfy")
 
 CALL_BACK_BASE_URL = os.getenv("CALL_BACK_BASE_URL", "")
 
+FALLBACK_PATH = os.getenv("FALLBACK_PATH", "fallback")
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

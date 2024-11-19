@@ -6,8 +6,9 @@ import uuid
 
 import httpx
 import websockets
+from sqlalchemy.event import listen
 
-from config import COMFY_HOST, COMFY_PORT, COMFY_CLIENT_ID, CALL_BACK_BASE_URL
+from config import COMFY_HOST, COMFY_PORT, COMFY_CLIENT_ID, CALL_BACK_BASE_URL, FALLBACK_PATH
 from database import Record
 from database.repository import RecordRepository
 from s3 import upload_image_to_s3
@@ -24,6 +25,7 @@ class ComfyClient:
         self.port = COMFY_PORT
         self.client_id = COMFY_CLIENT_ID
         self.callback_base_url = CALL_BACK_BASE_URL
+        self.fallback_path = FALLBACK_PATH
 
     @staticmethod
     def get_instance():
@@ -60,19 +62,26 @@ class ComfyClient:
                         image = await self._retrieve_prompt(prompy_id)
                         s3_resp = await upload_image_to_s3(image)
                         logger.info(f'uploaded image to s3: {s3_resp}')
-                        if s3_resp['success']:
-                            record = await RecordRepository.retrieve_by_prompt_id(prompy_id)
-                            record.s3_key = s3_resp['key']
-                            record = await RecordRepository.update(record)
+                        if not s3_resp['success']:
+                            logger.error(f'upload image to s3 error: {s3_resp}')
+                            await self.store_failure(record, image)
+                            continue
+
+                        record = await RecordRepository.retrieve_by_prompt_id(prompy_id)
+                        record.s3_key = s3_resp['key']
+                        record = await RecordRepository.update(record)
+                        try:
                             await self.hook(record)
+                        except Exception as e:
+                            logger.error(f'webhook error: {e}')
+                            await self.store_failure(record, image)
+                        finally:
                             await self.clean_file(is_input=False, image_path=record.comfy_filepath)
-                        else:
-                            pass
-                            # todo record failure locally
+
                 except websockets.exceptions.ConnectionClosed:
                     logger.warning('connection closed, reconnecting...')
                     await asyncio.sleep(5)
-                    websocket = await websockets.connect(uri)
+                    await self.listen()
 
     async def _retrieve_prompt(self, prompt_id: str) -> bytes:
         """retrieve a prompt from the comfy server"""
@@ -133,3 +142,8 @@ class ComfyClient:
             response = await client.post(uri, files={'image': (file_name, image, 'image/jpeg')})
             logger.debug(f'upload image response: {response.text}')
             return response.json()
+
+    async def store_failure(self, record: Record, image: bytes):
+        """store failure prompt result of the s3 or webhook locally"""
+        async with open(self.fallback_path, 'wb') as f:
+            f.write(record.comfy_filepath, image)
