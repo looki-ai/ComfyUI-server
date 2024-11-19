@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from api.service import Service
+from config import ROUTE_PREFIX
 
 
 class CustomAPIRouter(APIRouter):
@@ -27,7 +28,7 @@ class CustomAPIRouter(APIRouter):
     def patch(self, path: str, *, response_model_exclude_none: bool = True, **kwargs: Any) -> Callable:
         return super().patch(path, response_model_exclude_none=response_model_exclude_none, **kwargs)
 
-router = CustomAPIRouter(prefix='/api/v1')
+router = CustomAPIRouter(prefix=ROUTE_PREFIX)
 
 
 class ServiceType(Enum):

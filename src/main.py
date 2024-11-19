@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from api import router
 from comfy import ComfyClient
+from config import SERVICE_PORT
 from database import init_rdb
 
 init_rdb()
@@ -29,4 +30,4 @@ async def callback(id: int, data: dict):
 app.include_router(router)
 
 if __name__ == '__main__':
-    uvicorn.run("main:app", host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=SERVICE_PORT)
