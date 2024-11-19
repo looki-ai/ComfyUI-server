@@ -32,7 +32,7 @@ router = CustomAPIRouter(prefix='/api/v1')
 
 class ServiceType(Enum):
     TEXT2IMG = 'text2img'
-    IMG2TEXT = 'img2text'
+    IMG2IMG = 'img2img'
 
 
 class RequestDTO(BaseModel):

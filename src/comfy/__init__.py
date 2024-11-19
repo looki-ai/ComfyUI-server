@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 
 import httpx
 import websockets
@@ -123,3 +124,12 @@ class ComfyClient:
         async with httpx.AsyncClient() as client:
             response = await client.post(uri, json=payload)
             logger.debug(f'clean file response: {response.text}')
+
+    async def upload_image(self, image: bytes):
+        """upload image to the comfy server"""
+        file_name = f'{uuid.uuid4()}.png'
+        uri = f'http://{self.host}:{self.port}/upload/image'
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(uri, files={'image': (file_name, image, 'image/jpeg')})
+            logger.debug(f'upload image response: {response.text}')
+            return response.json()
