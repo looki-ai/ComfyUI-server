@@ -165,8 +165,8 @@ Here, I take the example of the text production workflow of the flux model in th
 ![export_api](./images/export_api.png)
 
 2. create a new file in `src/workflows` folder, and paste the exported API into it. Replace the parameters you want to configure with $ (python template string format).
-3. add a enum number in `src/api/__init__.py` ServiceType class.
-4. create a function in `src/api/service.py` Service class, make sure the function name is the same as the enum number you added. And implement the function according to the workflow you exported.
+3. add a enum member in `src/api/__init__.py` ServiceType class.
+4. create a function in `src/api/service.py` Service class, make sure the function name is the same as the enum member you added. And implement the function according to the workflow you exported.
 
 Now you can use the new workflow in your application.
 
@@ -182,3 +182,14 @@ The base request json format is:
     "id": 1  // id from client
 }
 ```
+The immediate response and the webhook request format is:
+```json
+{
+  "prompt_id": "d8f9e16e-af8a-4315-9584-5e669bbdf3af", 
+  "s3_key": "fa39816b-e89f-4702-bce6-24351825e2ae.png", 
+  "id": 101, 
+  "comfy_filepath": "ComfyUI_00157_.png"
+}
+```
+
+**Contributions are welcome! Feel free to star, fork, and submit PRs to help improve this project. 😊**
