@@ -1,8 +1,10 @@
 import asyncio
 import json
 import logging
+import os
 import uuid
 
+import aiofiles
 import httpx
 import websockets
 
@@ -53,22 +55,22 @@ class ComfyServer:
                     json_data = json.loads(message)
                     if json_data.get("type") == "executing" and json_data.get("data", {}).get("node") is None:
                         # comfy server has finished the prompt task
-                        comfy_task_id = json_data['data']['prompt_id']
-                        image = await self._retrieve_image(comfy_task_id)
-                        s3_resp = await upload_image_to_s3(image)
-                        logger.info(f'uploaded image to s3: {s3_resp}')
-                        if not s3_resp['success']:
-                            logger.error(f'upload image to s3 error: {s3_resp}')
-                            await self.store_failure(record, image)
-                            continue
-
-                        record = await RecordRepository.retrieve_by_comfy_task_id(comfy_task_id)
-                        record.s3_key = s3_resp['key']
-                        record = await RecordRepository.update(record)
                         try:
+                            comfy_task_id = json_data['data']['prompt_id']
+                            image = await self._retrieve_image(comfy_task_id)
+                            record = await RecordRepository.retrieve_by_comfy_task_id(comfy_task_id)
+                            s3_resp = await upload_image_to_s3(image)
+                            logger.info(f'uploaded image to s3: {s3_resp}')
+                            if not s3_resp['success']:
+                                logger.error(f'upload image to s3 error: {s3_resp}')
+                                await self.store_failure(record, image)
+                                continue
+
+                            record.s3_key = s3_resp['key']
+                            record = await RecordRepository.update(record)
                             await self.hook(record)
                         except Exception as e:
-                            logger.error(f'webhook error: {e}')
+                            logger.error(f'webhook or s3 error: {e}')
                             await self.store_failure(record, image)
                         finally:
                             await self.clean_file(is_input=False, image_path=record.comfy_filepath)
@@ -143,9 +145,12 @@ class ComfyServer:
             return response.json()
 
     async def store_failure(self, record: Record, image: bytes):
-        """store failure prompt result of the s3 or webhook locally"""
-        async with open(self.fallback_path, 'wb') as f:
-            f.write(record.comfy_filepath, image)
+        """Store failure prompt result in the fallback path."""
+        file_path = os.path.join(self.fallback_path, record.comfy_filepath)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+        async with aiofiles.open(file_path, 'wb') as f:
+            await f.write(image)
 
 
 comfy_servers = [ComfyServer(endpoint) for endpoint in COMFY_ENDPOINTS]
