@@ -73,8 +73,8 @@ By default, the APi working mode of ComfyUI is:
 - You can establish a websocket connection to ComfyUI based on the clientId. ComfyUI will send the processing information for requests with the same clientId.
 - The SaveImage and LoadImage nodes native to ComfyUI can only retrieve/output files from local folders.
 
-So, by using an environment variable to write a dead ClientId, this ID is always included in every request sent, and a background task is started to maintain the connection with ComfyUI. 
-I manually filtered out the information of task completion and traced back to the results of the task
+So, for each `ComfyServer`, specify a unique clientId, and use the clientId to establish a websocket connection with ComfyUI.
+For the messages sent from the ComfyUI, I manually filtered out the information of task completion and traced back to the results of the task.
 
 ### schedule multiple ComfyUI services
 Monitor the remaining number of tasks in the current queue of each Comfyui service through the websocket link, 
