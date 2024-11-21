@@ -5,9 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-COMFY_HOST = os.getenv('COMFY_HOST', 'localhost')
-COMFY_PORT = os.getenv('COMFY_PORT', 8188)
-COMFY_CLIENT_ID = os.getenv('COMFY_CLIENT_ID', '7777777')  # client id for the comfy client
+COMFY_ENDPOINTS = [url.strip() for url in os.getenv("COMFY_SERVERS", "localhost:8188").split(",")]
 
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")

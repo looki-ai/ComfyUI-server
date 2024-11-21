@@ -5,7 +5,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from api import router
-from comfy import ComfyServer
+from comfy import ComfyServer, comfy_servers, logger
 from config import SERVICE_PORT
 from database import init_rdb
 
@@ -14,12 +14,19 @@ init_rdb()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    comfy_client = ComfyServer.get_instance()
-    task = asyncio.create_task(comfy_client.listen())
-    try:
-        yield
-    finally:
+    tasks = []
+    for comfy_server in comfy_servers:
+        task = asyncio.create_task(comfy_server.listen())
+        tasks.append(task)
+
+    yield
+
+    for task in tasks:
         task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            logger.info(f'task {task.get_name()} cancelled')
 
 app = FastAPI(lifespan=lifespan)
 

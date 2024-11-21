@@ -7,11 +7,8 @@ import httpx
 import websockets
 
 from config import (
-    COMFY_HOST,
-    COMFY_PORT,
-    COMFY_CLIENT_ID,
     CALL_BACK_BASE_URL,
-    FALLBACK_PATH
+    FALLBACK_PATH, COMFY_ENDPOINTS
 )
 from database import Record
 from database.repository import RecordRepository
@@ -22,24 +19,16 @@ logger = logging.getLogger(__name__)
 
 
 class ComfyServer:
-    _instance = None
-
-    def __init__(self):
-        self.host = COMFY_HOST
-        self.port = COMFY_PORT
-        self.client_id = COMFY_CLIENT_ID
+    def __init__(self, endpoint: str):
+        self.queue_remaining = 0
+        self.endpoint = endpoint
+        self.client_id = uuid.uuid4().hex
         self.callback_base_url = CALL_BACK_BASE_URL
         self.fallback_path = FALLBACK_PATH
 
-    @staticmethod
-    def get_instance():
-        if ComfyServer._instance is None:
-            ComfyServer._instance = ComfyServer()
-        return ComfyServer._instance
-
     async def queue_prompt(self, client_task_id: int, prompt: dict) -> Record:
         """commit a prompt to the comfy server"""
-        uri = f'http://{self.host}:{self.port}/prompt'
+        uri = f'http://{self.endpoint}/prompt'
         payload = {
             'prompt': prompt,
             'client_id': self.client_id
@@ -54,7 +43,7 @@ class ComfyServer:
 
     async def listen(self):
         """listen messages from the comfy server"""
-        uri = f'ws://{self.host}:{self.port}/ws?clientId={self.client_id}'
+        uri = f'ws://{self.endpoint}/ws?clientId={self.client_id}'
         async with websockets.connect(uri) as websocket:
             logger.info('connected to comfy server')
             while True:
@@ -62,6 +51,7 @@ class ComfyServer:
                     message = await websocket.recv()
                     json_data = json.loads(message)
                     if json_data.get("type") == "executing" and json_data.get("data", {}).get("node") is None:
+                        # comfy server has finished the prompt task
                         comfy_task_id = json_data['data']['prompt_id']
                         image = await self._retrieve_image(comfy_task_id)
                         s3_resp = await upload_image_to_s3(image)
@@ -82,15 +72,22 @@ class ComfyServer:
                         finally:
                             await self.clean_file(is_input=False, image_path=record.comfy_filepath)
 
+                    elif json_data['type'] == 'status':
+                        # update queue remaining num
+                        self.queue_remaining = json_data['data']['status']['exec_info']['queue_remaining']
+                        logger.info(f'server {self.client_id} remaining: {self.queue_remaining}')
+
                 except websockets.exceptions.ConnectionClosed:
                     logger.warning('connection closed, reconnecting...')
                     await asyncio.sleep(5)
                     await self.listen()
+                except Exception as e:
+                    logger.error(f'server {self.client_id} websocket error: {e}')
 
     async def _retrieve_image(self, comfy_task_id: str) -> bytes:
         """retrieve prompt task result(image) from comfyui"""
         # 1. get the image path from the comfy server
-        history_uri = f'http://{self.host}:{self.port}/history/{comfy_task_id}'
+        history_uri = f'http://{self.endpoint}/history/{comfy_task_id}'
         async with httpx.AsyncClient() as client:
             response = await client.get(history_uri)
             history = response.json()
@@ -108,7 +105,7 @@ class ComfyServer:
             await RecordRepository.update(record)
 
             # 2. retrieve the image from the comfy server
-            view_uri = f'http://{self.host}:{self.port}/view'
+            view_uri = f'http://{self.endpoint}/view'
             params = {'filename': image_path}
             async with httpx.AsyncClient() as client:
                 response = await client.get(view_uri, params=params)
@@ -126,7 +123,7 @@ class ComfyServer:
         """clean input or output file from the comfy server"""
         prompt = CLEAN_FILE_PROMPT_TEMPLATE.substitute(type='input' if is_input else 'output', path=image_path)
         prompt_json = json.loads(prompt)
-        uri = f'http://{self.host}:{self.port}/prompt'
+        uri = f'http://{self.endpoint}/prompt'
         payload = {
             'prompt': prompt_json,
             # NOTE ignore client_id for now, in case of tracking the clean file system message
@@ -138,7 +135,7 @@ class ComfyServer:
     async def upload_image(self, image: bytes):
         """upload image to the comfy server"""
         file_name = f'{uuid.uuid4()}.png'
-        uri = f'http://{self.host}:{self.port}/upload/image'
+        uri = f'http://{self.endpoint}/upload/image'
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(uri, files={'image': (file_name, image, 'image/jpeg')})
             logger.debug(f'upload image response: {response.text}')
@@ -148,3 +145,6 @@ class ComfyServer:
         """store failure prompt result of the s3 or webhook locally"""
         async with open(self.fallback_path, 'wb') as f:
             f.write(record.comfy_filepath, image)
+
+
+comfy_servers = [ComfyServer(endpoint) for endpoint in COMFY_ENDPOINTS]

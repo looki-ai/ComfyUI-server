@@ -5,6 +5,7 @@ Due to the incomplete backend API interface provided by ComfyUI, it is very inco
 
 ## Features
 - Support deploying **any** ComfyUI workflow in a factory-like manner.
+- Integrate and schedule multiple Comfyui services.
 - Store the generated image in S3.
 - Monitor ComfyUI service and notify the client through **webhook** when image generation is complete.
 - Automatically clean up excess local input and output image files.
@@ -77,6 +78,10 @@ By default, the APi working mode of ComfyUI is:
 So, by using an environment variable to write a dead ClientId, this ID is always included in every request sent, and a background task is started to maintain the connection with ComfyUI. 
 I manually filtered out the information of task completion and traced back to the results of the task
 
+### schedule multiple ComfyUI services
+Monitor the remaining number of tasks in the current queue of each Comfyui service through the websocket link, 
+and select the service with the smallest number of tasks to send the prompt.
+
 ### Provide external interfaces
 I use fastapi, which is a python web framework, to provide external interfaces.
 The core code is in `src/api` folder, which contains the following files:
@@ -103,22 +108,29 @@ The ServiceType enum class contains the service types that can be provided, and 
 
 ```python
 # src/api/service.py
+def _schedule_comfy_server():
+    """schedule the comfy server with the least queue remaining"""
+    return min(comfy_servers, key=lambda x: x.queue_remaining)
+
+
 class Service:
     @staticmethod
-    async def text2img(id: int, params: dict) -> Record:
+    async def text2img(client_task_id: int, params: dict) -> Record:
+        comfy_server = _schedule_comfy_server()
         text = params.get('text')
         prompt_str = TEXT2IMG_PROMPT_TEMPLATE.substitute(text=text)
         prompt_json = json.loads(prompt_str)
-        return await comfy_client.queue_prompt(id, prompt_json)
+        return await comfy_server.queue_prompt(client_task_id, prompt_json)
 
     @staticmethod
-    async def img2img(id: int, params: dict) -> Record:
+    async def img2img(client_task_id: int, params: dict) -> Record:
+        comfy_server = _schedule_comfy_server()
         text = params.get('text')
         image_base64 = params.get('image')
 
         # upload image to comfyui
         image_bytes = base64.b64decode(image_base64)
-        resp = await comfy_client.upload_image(image_bytes)
+        resp = await comfy_server.upload_image(image_bytes)
         image_path = resp['name']
         if resp['subfolder']:
             image_path = f"{resp['subfolder']}/{image_path}"
@@ -127,10 +139,10 @@ class Service:
         prompt_str = IMG2IMG_PROMPT_TEMPLATE.substitute(text=text, image=image_path)
         prompt_json = json.loads(prompt_str)
         try:
-            return await comfy_client.queue_prompt(id, prompt_json)
+            return await comfy_server.queue_prompt(client_task_id, prompt_json)
         finally:
             # clean up the input file after the prompt is queued
-            await comfy_client.clean_file(is_input=True, image_path=image_path)
+            await comfy_server.clean_file(is_input=True, image_path=image_path)
 ```
 The `Service` class contains the service functions that can be provided. The above are two examples.
 
