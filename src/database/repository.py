@@ -15,13 +15,14 @@ class RecordRepository:
         return record
 
     @staticmethod
-    async def retrieve_by_prompt_id(prompt_id: str) -> Record:
+    async def retrieve_by_comfy_task_id(comfy_task_id: str) -> Record:
         async_session = async_sessionmaker(sql_engine)
         async with async_session() as session:
-            stmt = select(Record).where(Record.prompt_id == prompt_id)
+            stmt = select(Record).where(Record.comfy_task_id == comfy_task_id)
             result = await session.execute(stmt)
             record = result.scalars().first()
             return record
+
     @staticmethod
     async def update(record: Record) -> Record:
         async_session = async_sessionmaker(sql_engine)

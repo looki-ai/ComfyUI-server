@@ -5,7 +5,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from api import router
-from comfy import ComfyClient
+from comfy import ComfyServer
 from config import SERVICE_PORT
 from database import init_rdb
 
@@ -14,7 +14,7 @@ init_rdb()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    comfy_client = ComfyClient.get_instance()
+    comfy_client = ComfyServer.get_instance()
     task = asyncio.create_task(comfy_client.listen())
     try:
         yield
@@ -30,4 +30,4 @@ async def callback(id: int, data: dict):
 app.include_router(router)
 
 if __name__ == '__main__':
-    uvicorn.run("main:app", host="0.0.0.0", port=SERVICE_PORT)
+    uvicorn.run("main:app", host="0.0.0.0", port=int(SERVICE_PORT))

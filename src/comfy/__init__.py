@@ -1,14 +1,18 @@
 import asyncio
 import json
 import logging
-import os
 import uuid
 
 import httpx
 import websockets
-from sqlalchemy.event import listen
 
-from config import COMFY_HOST, COMFY_PORT, COMFY_CLIENT_ID, CALL_BACK_BASE_URL, FALLBACK_PATH
+from config import (
+    COMFY_HOST,
+    COMFY_PORT,
+    COMFY_CLIENT_ID,
+    CALL_BACK_BASE_URL,
+    FALLBACK_PATH
+)
 from database import Record
 from database.repository import RecordRepository
 from s3 import upload_image_to_s3
@@ -17,7 +21,7 @@ from workflows.clean_file import CLEAN_FILE_PROMPT_TEMPLATE
 logger = logging.getLogger(__name__)
 
 
-class ComfyClient:
+class ComfyServer:
     _instance = None
 
     def __init__(self):
@@ -29,11 +33,11 @@ class ComfyClient:
 
     @staticmethod
     def get_instance():
-        if ComfyClient._instance is None:
-            ComfyClient._instance = ComfyClient()
-        return ComfyClient._instance
+        if ComfyServer._instance is None:
+            ComfyServer._instance = ComfyServer()
+        return ComfyServer._instance
 
-    async def queue_prompt(self, id, prompt: dict) -> Record:
+    async def queue_prompt(self, client_task_id: int, prompt: dict) -> Record:
         """commit a prompt to the comfy server"""
         uri = f'http://{self.host}:{self.port}/prompt'
         payload = {
@@ -43,8 +47,8 @@ class ComfyClient:
         async with httpx.AsyncClient() as client:
             response = await client.post(uri, json=payload)
             logger.debug(f'queue prompt response: {response.text}')
-            prompt_id = response.json()['prompt_id']
-            record = Record(id=id, prompt_id=prompt_id)
+            comfy_task_id = response.json()['prompt_id']
+            record = Record(client_task_id=client_task_id, comfy_task_id=comfy_task_id)
             record = await RecordRepository.create(record)
             return record
 
@@ -58,8 +62,8 @@ class ComfyClient:
                     message = await websocket.recv()
                     json_data = json.loads(message)
                     if json_data.get("type") == "executing" and json_data.get("data", {}).get("node") is None:
-                        prompy_id = json_data['data']['prompt_id']
-                        image = await self._retrieve_prompt(prompy_id)
+                        comfy_task_id = json_data['data']['prompt_id']
+                        image = await self._retrieve_image(comfy_task_id)
                         s3_resp = await upload_image_to_s3(image)
                         logger.info(f'uploaded image to s3: {s3_resp}')
                         if not s3_resp['success']:
@@ -67,7 +71,7 @@ class ComfyClient:
                             await self.store_failure(record, image)
                             continue
 
-                        record = await RecordRepository.retrieve_by_prompt_id(prompy_id)
+                        record = await RecordRepository.retrieve_by_comfy_task_id(comfy_task_id)
                         record.s3_key = s3_resp['key']
                         record = await RecordRepository.update(record)
                         try:
@@ -83,39 +87,36 @@ class ComfyClient:
                     await asyncio.sleep(5)
                     await self.listen()
 
-    async def _retrieve_prompt(self, prompt_id: str) -> bytes:
-        """retrieve a prompt from the comfy server"""
-        history_uri = f'http://{self.host}:{self.port}/history/{prompt_id}'
+    async def _retrieve_image(self, comfy_task_id: str) -> bytes:
+        """retrieve prompt task result(image) from comfyui"""
+        # 1. get the image path from the comfy server
+        history_uri = f'http://{self.host}:{self.port}/history/{comfy_task_id}'
         async with httpx.AsyncClient() as client:
             response = await client.get(history_uri)
             history = response.json()
-        output_info = history[prompt_id]['outputs']
+        output_info = history[comfy_task_id]['outputs']
         for key in output_info:
             if 'images' not in output_info[key]:
                 continue
-            image_info = output_info[key]['images'][0]  # todo now only retrieve the first image
+            image_info = output_info[key]['images'][0]  # note now only retrieve the first image
             image_path = image_info['filename']
             if image_info['subfolder']:
                 image_path = f"{image_info['subfolder']}/{image_path}"
 
-            record = await RecordRepository.retrieve_by_prompt_id(prompt_id)
+            record = await RecordRepository.retrieve_by_comfy_task_id(comfy_task_id)
             record.comfy_filepath = image_path
             await RecordRepository.update(record)
-            return await self._process_image(image_path)
 
-
-    async def _process_image(self, image_path: str) -> bytes:
-        """retrieve image from the comfy server"""
-        view_uri = f'http://{self.host}:{self.port}/view'
-        params = {'filename': image_path}
-        async with httpx.AsyncClient() as client:
-            response = await client.get(view_uri, params=params)
-            image = response.content
-            return image
+            # 2. retrieve the image from the comfy server
+            view_uri = f'http://{self.host}:{self.port}/view'
+            params = {'filename': image_path}
+            async with httpx.AsyncClient() as client:
+                response = await client.get(view_uri, params=params)
+                return response.content
 
     async def hook(self, record: Record):
         """callback to the client server"""
-        uri = f'{self.callback_base_url}/{record.id}'
+        uri = f'{self.callback_base_url}/{record.client_task_id}'
         async with httpx.AsyncClient() as client:
             response = await client.post(uri, json=record.to_dict())
             logger.debug(f'callback response: {response.text}')
