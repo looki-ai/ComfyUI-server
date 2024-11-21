@@ -1,5 +1,6 @@
 aio-pika==9.4.3
 aiobotocore==2.15.2
+aiofiles==24.1.0
 aiohappyeyeballs==2.4.3
 aiohttp==3.11.2
 aioitertools==0.12.0
