@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-COMFY_ENDPOINTS = [url.strip() for url in os.getenv("COMFY_SERVERS", "localhost:8188").split(",")]
+COMFY_ENDPOINTS = [url.strip() for url in os.getenv("COMFY_ENDPOINTS", "localhost:8188").split(",")]
 
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")

@@ -8,7 +8,8 @@ import websockets
 
 from config import (
     CALL_BACK_BASE_URL,
-    FALLBACK_PATH, COMFY_ENDPOINTS
+    FALLBACK_PATH,
+    COMFY_ENDPOINTS
 )
 from database import Record
 from database.repository import RecordRepository

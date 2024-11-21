@@ -5,7 +5,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from api import router
-from comfy import ComfyServer, comfy_servers, logger
+from comfy import comfy_servers, logger
 from config import SERVICE_PORT
 from database import init_rdb
 
@@ -29,10 +29,6 @@ async def lifespan(app: FastAPI):
             logger.info(f'task {task.get_name()} cancelled')
 
 app = FastAPI(lifespan=lifespan)
-
-@app.post('/callback/{id}')
-async def callback(id: int, data: dict):
-    print(f'callback id: {id}, data: {data}')
 
 app.include_router(router)
 

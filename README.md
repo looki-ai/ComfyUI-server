@@ -24,9 +24,7 @@ git clone https://github.com/Poseidon-fan/ComfyUI-server.git
 
 Create `.env` file in ComfyUI-server root folder with the following variables:
 ```text
-COMFY_HOST = "localhost"                               # ComfyUI service host
-COMFY_PORT = "8188"                                    # ComfyUI service port
-COMFY_CLIENT_ID = "7777777"                            # ComfyUI server client id, could be specified arbitrarily
+COMFY_ENDPOINTS = "localhost:8188,localhost:8189"      # comfyui endpoints, separated by commas
 
 AWS_SECRET_ACCESS_KEY = "your_secret_access_key"       # AWS secret access key
 AWS_ACCESS_KEY_ID = "your_access_key_id"               # AWS access key id

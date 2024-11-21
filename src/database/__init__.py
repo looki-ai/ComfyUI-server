@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, text, Column, Integer, String, Index
+from sqlalchemy import create_engine, text, Integer, String, Index
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column
