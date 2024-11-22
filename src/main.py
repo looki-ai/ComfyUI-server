@@ -26,11 +26,12 @@ async def lifespan(app: FastAPI):
         try:
             await task
         except asyncio.CancelledError:
-            logger.info(f'task {task.get_name()} cancelled')
+            logger.info(f"task {task.get_name()} cancelled")
+
 
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(router)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=int(SERVICE_PORT))

@@ -53,7 +53,7 @@ cd ComfyUI-server
 python -m venv venv  # create virtual environment
 # activate virtual environment
 # on windows, use venv\Scripts\activate
-source venv/bin/activate  
+source venv/bin/activate
 pip install -r requirements.txt
 cd src
 python main.py
@@ -67,9 +67,9 @@ By default, the APi working mode of ComfyUI is:
 - The information sent by the user to ComfyUI contains two fields:
   - `prompt`: contains workflow information for ComfyUI
   - `clientId`: request sender's identification
-  
+
   Once received a prompt, ComfyUI will generate a prompt_id and send back. I call it `comfyui_task_id`.
-  
+
 - You can establish a websocket connection to ComfyUI based on the clientId. ComfyUI will send the processing information for requests with the same clientId.
 - The SaveImage and LoadImage nodes native to ComfyUI can only retrieve/output files from local folders.
 
@@ -77,7 +77,7 @@ So, for each `ComfyUIServer`, specify a unique clientId, and use the clientId to
 For the messages sent from the ComfyUI, I manually filtered out the information of task completion and traced back to the results of the task.
 
 ### schedule multiple ComfyUI services
-Monitor the remaining number of tasks in the current queue of each Comfyui service through the websocket link, 
+Monitor the remaining number of tasks in the current queue of each Comfyui service through the websocket link,
 and select the service with the smallest number of tasks to send the prompt.
 
 ### Provide external interfaces
@@ -150,15 +150,15 @@ The workflow templates are stored in `src/workflows`, which can be configured ac
 The code could be found in `src/s3`, it's just a basic encapsulation of the aiobotocore library.
 
 ### Webhook
-In this system setup, a client-side `client_url` needs to be configured in the environment variable, 
-and every time the client sends a request, it must include the client's `client_task_id`. 
-When this service detects that ComfyUI has completed a prompt processing information and sent the file to S3 storage, 
+In this system setup, a client-side `client_url` needs to be configured in the environment variable,
+and every time the client sends a request, it must include the client's `client_task_id`.
+When this service detects that ComfyUI has completed a prompt processing information and sent the file to S3 storage,
 it will access the `client_url/client_task_id` and include detailed result information in the request body.
 
 ### clean local input and output images
 Please refer to this custom node of ComfyUI: [https://github.com/Poseidon-fan/ComfyUI-fileCleaner](https://github.com/Poseidon-fan/ComfyUI-fileCleaner)
 
-### record task flow and save error files 
+### record task flow and save error files
 I use postgres as rdb to record these information:
 
 | field            | introduction                       |
@@ -197,9 +197,9 @@ The base request json format is:
 The immediate response and the webhook request format is:
 ```json
 {
-  "comfy_task_id": "d8f9e16e-af8a-4315-9584-5e669bbdf3af", 
-  "s3_key": "fa39816b-e89f-4702-bce6-24351825e2ae.png", 
-  "client_task_id": 101, 
+  "comfy_task_id": "d8f9e16e-af8a-4315-9584-5e669bbdf3af",
+  "s3_key": "fa39816b-e89f-4702-bce6-24351825e2ae.png",
+  "client_task_id": 101,
   "comfy_filepath": "ComfyUI_00157_.png"
 }
 ```

@@ -28,12 +28,13 @@ class CustomAPIRouter(APIRouter):
     def patch(self, path: str, *, response_model_exclude_none: bool = True, **kwargs: Any) -> Callable:
         return super().patch(path, response_model_exclude_none=response_model_exclude_none, **kwargs)
 
+
 router = CustomAPIRouter(prefix=ROUTE_PREFIX)
 
 
 class ServiceType(Enum):
-    TEXT2IMG = 'text2img'
-    IMG2IMG = 'img2img'
+    TEXT2IMG = "text2img"
+    IMG2IMG = "img2img"
 
 
 class RequestDTO(BaseModel):
@@ -41,9 +42,9 @@ class RequestDTO(BaseModel):
     client_task_id: int
     params: dict
 
-@router.post('')
+
+@router.post("")
 async def queue_prompt(request_dto: RequestDTO):
     """commit a prompt to the comfyui server"""
     service_func = getattr(Service, request_dto.service_type.value)
     return await service_func(request_dto.client_task_id, request_dto.params)
-

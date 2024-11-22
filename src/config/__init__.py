@@ -23,4 +23,4 @@ DEFAULT_FAILED_IMAGE_PATH = os.getenv("DEFAULT_FAILED_IMAGE_PATH", "fallback")
 SERVICE_PORT = os.getenv("SERVICE_PORT", 8000)
 ROUTE_PREFIX = os.getenv("ROUTE_PREFIX", "/api/v1")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
