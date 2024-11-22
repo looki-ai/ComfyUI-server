@@ -9,7 +9,7 @@ import httpx
 import websockets
 
 from config import CALLBACK_BASE_URL, COMFYUI_ENDPOINTS, DEFAULT_FAILED_IMAGE_PATH
-from database import ComfyUIRecord
+from database import ComfyUIRecord, ErrorCode
 from database.repository import RecordRepository
 from s3 import upload_image_to_s3
 from workflows.clean_local_file import CLEAN_LOCAL_FILE_PROMPT_TEMPLATE
@@ -28,13 +28,21 @@ class ComfyUIServer:
 
     async def queue_prompt(self, client_task_id: int, prompt: dict) -> ComfyUIRecord:
         """commit a prompt to the comfyui server"""
+        comfyui_record = ComfyUIRecord(client_task_id=client_task_id)
+        comfyui_record = await RecordRepository.create(comfyui_record)
+
         uri = f"http://{self.endpoint}/prompt"
         payload = {"prompt": prompt, "client_id": self.client_id}
-        response = await self.async_http_client.post(uri, json=payload)
-        logger.debug(f"queue prompt response: {response.text}")
-        comfyui_task_id = response.json()["prompt_id"]
-        comfyui_record = ComfyUIRecord(client_task_id=client_task_id, comfyui_task_id=comfyui_task_id)
-        comfyui_record = await RecordRepository.create(comfyui_record)
+        try:
+            response = await self.async_http_client.post(uri, json=payload)
+            logger.debug(f"queue prompt response: {response.text}")
+            comfyui_task_id = response.json()["prompt_id"]
+            comfyui_record.comfyui_task_id = comfyui_task_id
+            comfyui_record = await RecordRepository.update(comfyui_record)
+        except Exception as e:
+            logger.error(f"queue prompt error: {e}")
+            comfyui_record.error_code = ErrorCode.COMFYUI_QUEUE_PROMPT_ERROR
+            comfyui_record = await RecordRepository.update(comfyui_record)
         return comfyui_record
 
     async def listen(self):
@@ -50,21 +58,39 @@ class ComfyUIServer:
                         # comfyui server has finished the prompt task
                         try:
                             comfyui_task_id = json_data["data"]["prompt_id"]
-                            image = await self._retrieve_image(comfyui_task_id)
                             comfyui_record = await RecordRepository.retrieve_by_comfyui_task_id(comfyui_task_id)
+
+                            # 1. retrieve the image from comfyui
+                            retrieve_resp = await self._retrieve_image(comfyui_task_id)
+                            if not retrieve_resp["success"]:
+                                comfyui_record.error_code = ErrorCode.COMFYUI_RETRIEVE_IMAGE_ERROR
+                                comfyui_record = await RecordRepository.update(comfyui_record)
+                                await self.client_callback(comfyui_record)
+                                continue
+
+                            # 2. upload the image to s3
+                            image = retrieve_resp["image"]
                             s3_resp = await upload_image_to_s3(image)
                             logger.info(f"uploaded image to s3: {s3_resp}")
                             if not s3_resp["success"]:
                                 logger.error(f"upload image to s3 error: {s3_resp}")
+                                comfyui_record.error_code = ErrorCode.S3_UPLOAD_ERROR
+                                comfyui_record = await RecordRepository.update(comfyui_record)
                                 await self.store_failed_image(comfyui_record, image)
+                                await self.client_callback(comfyui_record)
                                 continue
 
+                            # 3. success, callback to the client
                             comfyui_record.s3_key = s3_resp["key"]
                             comfyui_record = await RecordRepository.update(comfyui_record)
                             await self.client_callback(comfyui_record)
+
                         except Exception as e:
                             logger.error(f"webhook or s3 error: {e}")
                             await self.store_failed_image(comfyui_record, image)
+                            comfyui_record.error_code = ErrorCode.UNKNOWN_ERROR
+                            comfyui_record = await RecordRepository.update(comfyui_record)
+                            await self.client_callback(comfyui_record)
                         finally:
                             await self.clean_local_file(is_input=False, image_path=comfyui_record.comfyui_filepath)
 
@@ -80,30 +106,35 @@ class ComfyUIServer:
                 except Exception as e:
                     logger.error(f"server {self.client_id} websocket error: {e}")
 
-    async def _retrieve_image(self, comfyui_task_id: str) -> bytes:
+    async def _retrieve_image(self, comfyui_task_id: str) -> dict:
         """retrieve prompt task result(image) from comfyui"""
-        # 1. get the image path from the comfyui server
-        history_uri = f"http://{self.endpoint}/history/{comfyui_task_id}"
-        response = await self.async_http_client.get(history_uri)
-        history = response.json()
-        output_info = history[comfyui_task_id]["outputs"]
-        for key in output_info:
-            if "images" not in output_info[key]:
-                continue
-            image_info = output_info[key]["images"][0]  # note now only retrieve the first image
-            image_path = image_info["filename"]
-            if image_info["subfolder"]:
-                image_path = f"{image_info['subfolder']}/{image_path}"
+        try:
+            # 1. get the image path from the comfyui server
+            history_uri = f"http://{self.endpoint}/history/{comfyui_task_id}"
+            response = await self.async_http_client.get(history_uri)
+            history = response.json()
+            output_info = history[comfyui_task_id]["outputs"]
+            for key in output_info:
+                if "images" not in output_info[key]:
+                    continue
+                image_info = output_info[key]["images"][0]  # note now only retrieve the first image
+                image_path = image_info["filename"]
+                if image_info["subfolder"]:
+                    image_path = f"{image_info['subfolder']}/{image_path}"
 
-            comfyui_record = await RecordRepository.retrieve_by_comfyui_task_id(comfyui_task_id)
-            comfyui_record.comfyui_filepath = image_path
-            await RecordRepository.update(comfyui_record)
+                comfyui_record = await RecordRepository.retrieve_by_comfyui_task_id(comfyui_task_id)
+                comfyui_record.comfyui_filepath = image_path
+                await RecordRepository.update(comfyui_record)
 
-            # 2. retrieve the image from the comfyui server
-            view_uri = f"http://{self.endpoint}/view"
-            params = {"filename": image_path}
-            response = await self.async_http_client.get(view_uri, params=params)
-            return response.content
+                # 2. retrieve the image from the comfyui server
+                view_uri = f"http://{self.endpoint}/view"
+                params = {"filename": image_path}
+                response = await self.async_http_client.get(view_uri, params=params)
+                return {"success": True, "image": response.content}
+
+        except Exception as e:
+            logger.error(f"retrieve image error: {e}")
+            return {"success": False}
 
     async def client_callback(self, comfyui_record: ComfyUIRecord):
         """callback to the client server"""
@@ -132,9 +163,9 @@ class ComfyUIServer:
         logger.debug(f"upload image response: {response.text}")
         return response.json()
 
-    async def store_failed_image(self, record: ComfyUIRecord, image: bytes):
+    async def store_failed_image(self, comfyui_record: ComfyUIRecord, image: bytes):
         """Store failure prompt result in the fallback path."""
-        file_path = os.path.join(self.default_failed_image_path, record.comfyui_filepath)
+        file_path = os.path.join(self.default_failed_image_path, comfyui_record.comfyui_filepath)
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
         async with aiofiles.open(file_path, "wb") as f:

@@ -1,7 +1,10 @@
+from enum import Enum
+
 from sqlalchemy import Index, Integer, String, create_engine, text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import Enum as SqlAlchemyEnum
 
 from config import RDB_HOST, RDB_NAME, RDB_PASSWORD, RDB_PORT, RDB_USERNAME
 
@@ -11,17 +14,39 @@ sql_engine = create_async_engine(_url, pool_pre_ping=True)
 Base = declarative_base()
 
 
+class ErrorCode(Enum):
+    SUCCESS = 0
+    COMFYUI_QUEUE_PROMPT_ERROR = 1
+    S3_UPLOAD_ERROR = 2
+    COMFYUI_RETRIEVE_IMAGE_ERROR = 3
+    UNKNOWN_ERROR = 10
+
+
 class ComfyUIRecord(Base):
     __tablename__ = "comfyui_records"
     __table_args__ = (Index("idx_comfyui_task_id", "comfyui_task_id"),)
 
     client_task_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    comfyui_task_id: Mapped[str] = mapped_column(String, nullable=False)
+    comfyui_task_id: Mapped[str | None] = mapped_column(String)
     comfyui_filepath: Mapped[str | None] = mapped_column(String)
     s3_key: Mapped[str | None] = mapped_column(String)
+    error_code: Mapped[ErrorCode | None] = mapped_column(
+        SqlAlchemyEnum(ErrorCode),
+        nullable=True,
+        default=ErrorCode.SUCCESS,
+        server_default=ErrorCode.SUCCESS.name,
+    )
 
     def to_dict(self):
-        return {key: value for key, value in vars(self).items() if not key.startswith("_")}
+        result = {}
+        for key, value in vars(self).items():
+            if key.startswith("_"):
+                continue
+            if isinstance(value, ErrorCode):
+                result[key] = value.value
+            else:
+                result[key] = value
+        return result
 
     def __repr__(self):
         return (
