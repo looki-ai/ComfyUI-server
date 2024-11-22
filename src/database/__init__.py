@@ -16,13 +16,13 @@ sql_engine = create_async_engine(_url, pool_pre_ping=True)
 
 Base = declarative_base()
 
-class Record(Base):
-    __tablename__ = "records"
-    __table_args__ = (Index("idx_prompt_id", "comfy_task_id"),)
+class ComfyUIRecord(Base):
+    __tablename__ = "comfyui_records"
+    __table_args__ = (Index("idx_comfyui_task_id", "comfyui_task_id"),)
 
     client_task_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    comfy_task_id: Mapped[str] = mapped_column(String, nullable=False)
-    comfy_filepath: Mapped[str | None] = mapped_column(String)
+    comfyui_task_id: Mapped[str] = mapped_column(String, nullable=False)
+    comfyui_filepath: Mapped[str | None] = mapped_column(String)
     s3_key: Mapped[str | None] = mapped_column(String)
 
     def to_dict(self):
@@ -30,8 +30,8 @@ class Record(Base):
 
     def __repr__(self):
         return (
-            f"<Record(client_task_id={self.client_task_id}, comfy_task_id={self.comfy_task_id}, "
-            f"comfy_path={self.comfy_filepath}, s3_key={self.s3_key})>"
+            f"<Record(client_task_id={self.client_task_id}, comfyui_task_id={self.comfyui_task_id}, "
+            f"comfyui_path={self.comfyui_filepath}, s3_key={self.s3_key})>"
         )
 
 def init_rdb():

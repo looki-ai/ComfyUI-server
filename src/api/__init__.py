@@ -43,7 +43,7 @@ class RequestDTO(BaseModel):
 
 @router.post('')
 async def queue_prompt(request_dto: RequestDTO):
-    """commit a prompt to the comfy server"""
+    """commit a prompt to the comfyui server"""
     service_func = getattr(Service, request_dto.service_type.value)
     return await service_func(request_dto.client_task_id, request_dto.params)
 

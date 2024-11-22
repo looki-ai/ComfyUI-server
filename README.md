@@ -24,7 +24,7 @@ git clone https://github.com/Poseidon-fan/ComfyUI-server.git
 
 Create `.env` file in ComfyUI-server root folder with the following variables:
 ```text
-COMFY_ENDPOINTS = "localhost:8188,localhost:8189"      # comfyui endpoints, separated by commas
+COMFYUI_ENDPOINTS = "localhost:8188,localhost:8189"    # comfyui endpoints, separated by commas
 
 AWS_SECRET_ACCESS_KEY = "your_secret_access_key"       # AWS secret access key
 AWS_ACCESS_KEY_ID = "your_access_key_id"               # AWS access key id
@@ -37,8 +37,8 @@ RDB_HOST = "localhost"                                 # Postgres host
 RDB_PORT = "5432"                                      # Postgres port
 RDB_NAME = "comfy"                                     # Postgres database name
 
-CALL_BACK_BASE_URL = "http://localhost:8000/callback"  # webhook callback url
-FALLBACK_PATH = "fallback"                             # fallback local path for error files
+CALLBACK_BASE_URL = "http://localhost:8000/callback"   # webhook callback url
+DEFAULT_FAILED_IMAGE_PATH = "fallback"                 # fallback local path for error files
 SERVICE_PORT = 8000                                    # server port
 ROUTE_PREFIX = "/api/v1"                               # api route prefix
 ```
@@ -68,12 +68,12 @@ By default, the APi working mode of ComfyUI is:
   - `prompt`: contains workflow information for ComfyUI
   - `clientId`: request sender's identification
   
-  Once received a prompt, ComfyUI will generate a prompt_id and send back. I call it `comfy_task_id`.
+  Once received a prompt, ComfyUI will generate a prompt_id and send back. I call it `comfyui_task_id`.
   
 - You can establish a websocket connection to ComfyUI based on the clientId. ComfyUI will send the processing information for requests with the same clientId.
 - The SaveImage and LoadImage nodes native to ComfyUI can only retrieve/output files from local folders.
 
-So, for each `ComfyServer`, specify a unique clientId, and use the clientId to establish a websocket connection with ComfyUI.
+So, for each `ComfyUIServer`, specify a unique clientId, and use the clientId to establish a websocket connection with ComfyUI.
 For the messages sent from the ComfyUI, I manually filtered out the information of task completion and traced back to the results of the task.
 
 ### schedule multiple ComfyUI services
@@ -98,7 +98,7 @@ class RequestDTO(BaseModel):
 
 @router.post('')
 async def queue_prompt(request_dto: RequestDTO):
-    """commit a prompt to the comfy server"""
+    """commit a prompt to the comfyui server"""
     service_func = getattr(Service, request_dto.service_type.value)
     return await service_func(request_dto.id, request_dto.params)
 ```
@@ -106,41 +106,41 @@ The ServiceType enum class contains the service types that can be provided, and 
 
 ```python
 # src/api/service.py
-def _schedule_comfy_server():
-    """schedule the comfy server with the least queue remaining"""
-    return min(comfy_servers, key=lambda x: x.queue_remaining)
+def _get_comfyui_server():
+    """schedule the comfyui server with the least queue remaining"""
+    return min(comfyui_servers, key=lambda x: x.queue_remaining)
 
 
 class Service:
     @staticmethod
-    async def text2img(client_task_id: int, params: dict) -> Record:
-        comfy_server = _schedule_comfy_server()
+    async def text2img(client_task_id: int, params: dict) -> ComfyUIRecord:
+        comfyui_server = _get_comfyui_server()
         text = params.get('text')
-        prompt_str = TEXT2IMG_PROMPT_TEMPLATE.substitute(text=text)
+        prompt_str = TEXT2IMG_COMFYUI_PROMPT_TEMPLATE.substitute(text=text)
         prompt_json = json.loads(prompt_str)
-        return await comfy_server.queue_prompt(client_task_id, prompt_json)
+        return await comfyui_server.queue_prompt(client_task_id, prompt_json)
 
     @staticmethod
-    async def img2img(client_task_id: int, params: dict) -> Record:
-        comfy_server = _schedule_comfy_server()
+    async def img2img(client_task_id: int, params: dict) -> ComfyUIRecord:
+        comfyui_server = _get_comfyui_server()
         text = params.get('text')
         image_base64 = params.get('image')
 
         # upload image to comfyui
         image_bytes = base64.b64decode(image_base64)
-        resp = await comfy_server.upload_image(image_bytes)
+        resp = await comfyui_server.upload_image(image_bytes)
         image_path = resp['name']
         if resp['subfolder']:
             image_path = f"{resp['subfolder']}/{image_path}"
 
         # create prompt
-        prompt_str = IMG2IMG_PROMPT_TEMPLATE.substitute(text=text, image=image_path)
+        prompt_str = IMG2IMG_COMFYUI_PROMPT_TEMPLATE.substitute(text=text, image=image_path)
         prompt_json = json.loads(prompt_str)
         try:
-            return await comfy_server.queue_prompt(client_task_id, prompt_json)
+            return await comfyui_server.queue_prompt(client_task_id, prompt_json)
         finally:
             # clean up the input file after the prompt is queued
-            await comfy_server.clean_file(is_input=True, image_path=image_path)
+            await comfyui_server.clean_local_file(is_input=True, image_path=image_path)
 ```
 The `Service` class contains the service functions that can be provided. The above are two examples.
 
@@ -161,12 +161,12 @@ Please refer to this custom node of ComfyUI: [https://github.com/Poseidon-fan/Co
 ### record task flow and save error files 
 I use postgres as rdb to record these information:
 
-| field          | introduction                       |
-|----------------|------------------------------------|
-| client_task_id | the task id sent from the client   |
-| comfy_task_id  | the prompt_id generated by ComfyUI |
-| s3_key         | key of the s3 object               |
-| comfy_filepath | image path locally                 |
+| field            | introduction                       |
+|------------------|------------------------------------|
+| client_task_id   | the task id sent from the client   |
+| comfyui_task_id  | the prompt_id generated by ComfyUI |
+| s3_key           | key of the s3 object               |
+| comfyui_filepath | image path locally                 |
 
 when there's an error when uploading to s3 or webhook, the error file will be saved in the fallback path. Its path is the same as comfy_filepath.
 
