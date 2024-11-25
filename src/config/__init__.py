@@ -19,7 +19,7 @@ RDB_PORT = os.getenv("RDB_PORT", 5432)
 RDB_NAME = os.getenv("RDB_NAME", "comfyui")
 
 CALLBACK_BASE_URL = os.getenv("CALLBACK_BASE_URL", "")
-DEFAULT_FAILED_IMAGE_PATH = os.getenv("DEFAULT_FAILED_IMAGE_PATH", "fallback")
+DEFAULT_FAILED_IMAGE_PATH = os.getenv("DEFAULT_FAILED_IMAGE_PATH", "../tmp/failed_images")
 SERVICE_PORT = os.getenv("SERVICE_PORT", 8000)
 ROUTE_PREFIX = os.getenv("ROUTE_PREFIX", "/api/v1")
 
