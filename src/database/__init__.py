@@ -27,6 +27,7 @@ class ComfyUIRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     client_task_id: Mapped[str] = mapped_column(String)
+    client_callback_url: Mapped[str] = mapped_column(String)
     comfyui_task_id: Mapped[str | None] = mapped_column(String)
     comfyui_filepath: Mapped[str | None] = mapped_column(String)
     s3_key: Mapped[str | None] = mapped_column(String)

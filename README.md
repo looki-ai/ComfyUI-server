@@ -36,8 +36,7 @@ RDB_PASSWORD = "123456"                                      # Postgres password
 RDB_HOST = "localhost"                                       # Postgres host
 RDB_PORT = "5432"                                            # Postgres port
 RDB_NAME = "comfy"                                           # Postgres database name
-
-CALLBACK_BASE_URL = "http://localhost:8000/callback"         # webhook callback url
+        # webhook callback url
 DEFAULT_FAILED_IMAGE_PATH = "../tmp/failed_images"           # fallback local path for error files
 SERVICE_PORT = 8000                                          # server port
 ROUTE_PREFIX = "/api/v1"                                     # api route prefix

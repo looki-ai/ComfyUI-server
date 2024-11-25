@@ -8,7 +8,7 @@ import aiofiles
 import httpx
 import websockets
 
-from config import CALLBACK_BASE_URL, COMFYUI_ENDPOINTS, DEFAULT_FAILED_IMAGE_PATH
+from config import COMFYUI_ENDPOINTS, DEFAULT_FAILED_IMAGE_PATH
 from database import ComfyUIRecord, ErrorCode
 from database.repository import RecordRepository
 from s3 import upload_image_to_s3
@@ -23,12 +23,11 @@ class ComfyUIServer:
         self.queue_remaining = 0
         self.endpoint = endpoint
         self.client_id = uuid.uuid4().hex
-        self.callback_base_url = CALLBACK_BASE_URL
         self.default_failed_image_path = DEFAULT_FAILED_IMAGE_PATH
 
-    async def queue_prompt(self, client_task_id: str, prompt: dict) -> ComfyUIRecord:
+    async def queue_prompt(self, client_task_id: str, client_callback_url: str, prompt: dict) -> ComfyUIRecord:
         """commit a prompt to the comfyui server"""
-        comfyui_record = ComfyUIRecord(client_task_id=client_task_id)
+        comfyui_record = ComfyUIRecord(client_task_id=client_task_id, client_callback_url=client_callback_url)
         comfyui_record = await RecordRepository.create(comfyui_record)
 
         uri = f"http://{self.endpoint}/prompt"
@@ -140,7 +139,7 @@ class ComfyUIServer:
 
     async def client_callback(self, comfyui_record: ComfyUIRecord):
         """callback to the client server"""
-        response = await self.async_http_client.post(self.callback_base_url, json=comfyui_record.to_dict())
+        response = await self.async_http_client.post(comfyui_record.client_callback_url, json=comfyui_record.to_dict())
         logger.debug(f"callback response: {response.text}")
         return response.json()
 

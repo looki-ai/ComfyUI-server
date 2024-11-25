@@ -14,15 +14,15 @@ def _get_comfyui_server():
 
 class Service:
     @staticmethod
-    async def text2img(client_task_id: str, params: dict) -> ComfyUIRecord:
+    async def text2img(client_task_id: str, client_callback_url: str, params: dict) -> ComfyUIRecord:
         comfyui_server = _get_comfyui_server()
         text = params.get("text")
         prompt_str = TEXT2IMG_COMFYUI_PROMPT_TEMPLATE.substitute(text=text)
         prompt_json = json.loads(prompt_str)
-        return await comfyui_server.queue_prompt(client_task_id, prompt_json)
+        return await comfyui_server.queue_prompt(client_task_id, client_callback_url, prompt_json)
 
     @staticmethod
-    async def img2img(client_task_id: str, params: dict) -> ComfyUIRecord:
+    async def img2img(client_task_id: str, client_callback_url: str, params: dict) -> ComfyUIRecord:
         comfyui_server = _get_comfyui_server()
         text = params.get("text")
         image_base64 = params.get("image")
@@ -38,7 +38,7 @@ class Service:
         prompt_str = IMG2IMG_COMFYUI_PROMPT_TEMPLATE.substitute(text=text, image=image_path)
         prompt_json = json.loads(prompt_str)
         try:
-            return await comfyui_server.queue_prompt(client_task_id, prompt_json)
+            return await comfyui_server.queue_prompt(client_task_id, client_callback_url, prompt_json)
         finally:
             # clean up the input file after the prompt is queued
             await comfyui_server.clean_local_file(is_input=True, image_path=image_path)

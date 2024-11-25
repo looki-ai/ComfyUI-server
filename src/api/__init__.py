@@ -40,6 +40,7 @@ class ServiceType(Enum):
 class RequestDTO(BaseModel):
     service_type: ServiceType
     client_task_id: str
+    client_callback_url: str
     params: dict
 
 
@@ -47,4 +48,4 @@ class RequestDTO(BaseModel):
 async def queue_prompt(request_dto: RequestDTO):
     """commit a prompt to the comfyui server"""
     service_func = getattr(Service, request_dto.service_type.value)
-    return await service_func(request_dto.client_task_id, request_dto.params)
+    return await service_func(request_dto.client_task_id, request_dto.client_callback_url, request_dto.params)
