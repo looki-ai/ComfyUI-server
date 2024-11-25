@@ -24,23 +24,23 @@ git clone https://github.com/Poseidon-fan/ComfyUI-server.git
 
 Create `.env` file in ComfyUI-server root folder with the following variables:
 ```text
-COMFYUI_ENDPOINTS = "localhost:8188,localhost:8189"    # comfyui endpoints, separated by commas
+COMFYUI_ENDPOINTS = "localhost:8188,localhost:8189"          # comfyui endpoints, separated by commas
 
-AWS_SECRET_ACCESS_KEY = "your_secret_access_key"       # AWS secret access key
-AWS_ACCESS_KEY_ID = "your_access_key_id"               # AWS access key id
-S3_BUCKET = "your_S3_bucket_name"                      # S3 bucket name
-S3_REGION_NAME = "your_S3_region_name"                 # S3 region
+AWS_SECRET_ACCESS_KEY = "your_secret_access_key"             # AWS secret access key
+AWS_ACCESS_KEY_ID = "your_access_key_id"                     # AWS access key id
+S3_BUCKET = "your_S3_bucket_name"                            # S3 bucket name
+S3_REGION_NAME = "your_S3_region_name"                       # S3 region
 
-RDB_USERNAME = "root"                                  # Postgres username
-RDB_PASSWORD = "123456"                                # Postgres password
-RDB_HOST = "localhost"                                 # Postgres host
-RDB_PORT = "5432"                                      # Postgres port
-RDB_NAME = "comfy"                                     # Postgres database name
+RDB_USERNAME = "root"                                        # Postgres username
+RDB_PASSWORD = "123456"                                      # Postgres password
+RDB_HOST = "localhost"                                       # Postgres host
+RDB_PORT = "5432"                                            # Postgres port
+RDB_NAME = "comfy"                                           # Postgres database name
 
-CALLBACK_BASE_URL = "http://localhost:8000/callback"   # webhook callback url
-DEFAULT_FAILED_IMAGE_PATH = "fallback"                 # fallback local path for error files
-SERVICE_PORT = 8000                                    # server port
-ROUTE_PREFIX = "/api/v1"                               # api route prefix
+CALLBACK_BASE_URL = "http://localhost:8000/callback"         # webhook callback url
+DEFAULT_FAILED_IMAGE_PATH = "../default_failed_image_folder" # fallback local path for error files
+SERVICE_PORT = 8000                                          # server port
+ROUTE_PREFIX = "/api/v1"                                     # api route prefix
 ```
 
 3. install [fileCleaner node](https://github.com/Poseidon-fan/ComfyUI-fileCleaner)
@@ -50,10 +50,8 @@ make sure your comfyUI has already installed this custom node.
 4. run the server
 ```bash
 cd ComfyUI-server
-python -m venv venv  # create virtual environment
-# activate virtual environment
-# on windows, use venv\Scripts\activate
-source venv/bin/activate
+poetry install
+poetry shell
 pip install -r requirements.txt
 cd src
 python main.py

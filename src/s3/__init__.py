@@ -17,7 +17,10 @@ async def upload_image_to_s3(image: bytes) -> dict:
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         aws_access_key_id=AWS_ACCESS_KEY_ID,
     ) as client:
-        resp = await client.put_object(Bucket=S3_BUCKET, Key=key, Body=image_stream)
-        if resp["ResponseMetadata"]["HTTPStatusCode"] == 200:
-            return {"success": True, "key": key}
-        return {"success": False, "key": key}
+        try:
+            resp = await client.put_object(Bucket=S3_BUCKET, Key=key, Body=image_stream)
+            if resp["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                return {"success": True, "key": key}
+            return {"success": False, "key": key}
+        except Exception:
+            return {"success": False, "key": key}

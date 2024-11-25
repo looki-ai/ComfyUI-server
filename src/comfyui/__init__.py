@@ -26,7 +26,7 @@ class ComfyUIServer:
         self.callback_base_url = CALLBACK_BASE_URL
         self.default_failed_image_path = DEFAULT_FAILED_IMAGE_PATH
 
-    async def queue_prompt(self, client_task_id: int, prompt: dict) -> ComfyUIRecord:
+    async def queue_prompt(self, client_task_id: str, prompt: dict) -> ComfyUIRecord:
         """commit a prompt to the comfyui server"""
         comfyui_record = ComfyUIRecord(client_task_id=client_task_id)
         comfyui_record = await RecordRepository.create(comfyui_record)
@@ -39,9 +39,9 @@ class ComfyUIServer:
             comfyui_task_id = response.json()["prompt_id"]
             comfyui_record.comfyui_task_id = comfyui_task_id
             comfyui_record = await RecordRepository.update(comfyui_record)
-        except Exception as e:
-            logger.error(f"queue prompt error: {e}")
-            comfyui_record.error_code = ErrorCode.COMFYUI_QUEUE_PROMPT_ERROR
+        except Exception:
+            logger.exception("queue prompt error")
+            comfyui_record.error_code = ErrorCode.COMFYUI_QUEUE_PROMPT_ERROR.value
             comfyui_record = await RecordRepository.update(comfyui_record)
         return comfyui_record
 
@@ -57,16 +57,17 @@ class ComfyUIServer:
                     if json_data.get("type") == "executing" and json_data.get("data", {}).get("node") is None:
                         # comfyui server has finished the prompt task
                         try:
+                            # 1. retrieve the image from comfyui
                             comfyui_task_id = json_data["data"]["prompt_id"]
                             comfyui_record = await RecordRepository.retrieve_by_comfyui_task_id(comfyui_task_id)
-
-                            # 1. retrieve the image from comfyui
                             retrieve_resp = await self._retrieve_image(comfyui_task_id)
                             if not retrieve_resp["success"]:
-                                comfyui_record.error_code = ErrorCode.COMFYUI_RETRIEVE_IMAGE_ERROR
+                                comfyui_record.error_code = ErrorCode.COMFYUI_RETRIEVE_IMAGE_ERROR.value
                                 comfyui_record = await RecordRepository.update(comfyui_record)
                                 await self.client_callback(comfyui_record)
                                 continue
+                            comfyui_record = await RecordRepository.retrieve_by_comfyui_task_id(comfyui_task_id)
+                            comfyui_filepath = comfyui_record.comfyui_filepath
 
                             # 2. upload the image to s3
                             image = retrieve_resp["image"]
@@ -74,7 +75,7 @@ class ComfyUIServer:
                             logger.info(f"uploaded image to s3: {s3_resp}")
                             if not s3_resp["success"]:
                                 logger.error(f"upload image to s3 error: {s3_resp}")
-                                comfyui_record.error_code = ErrorCode.S3_UPLOAD_ERROR
+                                comfyui_record.error_code = ErrorCode.S3_UPLOAD_ERROR.value
                                 comfyui_record = await RecordRepository.update(comfyui_record)
                                 await self.store_failed_image(comfyui_record, image)
                                 await self.client_callback(comfyui_record)
@@ -85,14 +86,15 @@ class ComfyUIServer:
                             comfyui_record = await RecordRepository.update(comfyui_record)
                             await self.client_callback(comfyui_record)
 
-                        except Exception as e:
-                            logger.error(f"webhook or s3 error: {e}")
+                        except Exception:
+                            logger.exception("webhook or s3 error")
                             await self.store_failed_image(comfyui_record, image)
-                            comfyui_record.error_code = ErrorCode.UNKNOWN_ERROR
-                            comfyui_record = await RecordRepository.update(comfyui_record)
+                            if comfyui_record.error_code == 0:
+                                comfyui_record.error_code = ErrorCode.UNKNOWN_ERROR.value
+                                comfyui_record = await RecordRepository.update(comfyui_record)
                             await self.client_callback(comfyui_record)
                         finally:
-                            await self.clean_local_file(is_input=False, image_path=comfyui_record.comfyui_filepath)
+                            await self.clean_local_file(is_input=False, image_path=comfyui_filepath)
 
                     elif json_data["type"] == "status":
                         # update queue remaining num
@@ -103,8 +105,8 @@ class ComfyUIServer:
                     logger.warning("connection closed, reconnecting...")
                     await asyncio.sleep(5)
                     await self.listen()
-                except Exception as e:
-                    logger.error(f"server {self.client_id} websocket error: {e}")
+                except Exception:
+                    logger.exception(f"server {self.client_id} websocket error")
 
     async def _retrieve_image(self, comfyui_task_id: str) -> dict:
         """retrieve prompt task result(image) from comfyui"""
@@ -132,14 +134,13 @@ class ComfyUIServer:
                 response = await self.async_http_client.get(view_uri, params=params)
                 return {"success": True, "image": response.content}
 
-        except Exception as e:
-            logger.error(f"retrieve image error: {e}")
+        except Exception:
+            logger.exception("retrieve image error")
             return {"success": False}
 
     async def client_callback(self, comfyui_record: ComfyUIRecord):
         """callback to the client server"""
-        uri = f"{self.callback_base_url}/{comfyui_record.client_task_id}"
-        response = await self.async_http_client.post(uri, json=comfyui_record.to_dict())
+        response = await self.async_http_client.post(self.callback_base_url, json=comfyui_record.to_dict())
         logger.debug(f"callback response: {response.text}")
         return response.json()
 

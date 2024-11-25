@@ -4,7 +4,6 @@ from sqlalchemy import Index, Integer, String, create_engine, text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import Enum as SqlAlchemyEnum
 
 from config import RDB_HOST, RDB_NAME, RDB_PASSWORD, RDB_PORT, RDB_USERNAME
 
@@ -26,15 +25,16 @@ class ComfyUIRecord(Base):
     __tablename__ = "comfyui_records"
     __table_args__ = (Index("idx_comfyui_task_id", "comfyui_task_id"),)
 
-    client_task_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_task_id: Mapped[str] = mapped_column(String)
     comfyui_task_id: Mapped[str | None] = mapped_column(String)
     comfyui_filepath: Mapped[str | None] = mapped_column(String)
     s3_key: Mapped[str | None] = mapped_column(String)
     error_code: Mapped[ErrorCode | None] = mapped_column(
-        SqlAlchemyEnum(ErrorCode),
+        Integer,
         nullable=True,
-        default=ErrorCode.SUCCESS,
-        server_default=ErrorCode.SUCCESS.name,
+        default=ErrorCode.SUCCESS.value,
+        server_default=str(ErrorCode.SUCCESS.value),
     )
 
     def to_dict(self):

@@ -39,7 +39,7 @@ class ServiceType(Enum):
 
 class RequestDTO(BaseModel):
     service_type: ServiceType
-    client_task_id: int
+    client_task_id: str
     params: dict
 
 

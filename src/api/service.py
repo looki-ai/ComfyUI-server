@@ -14,7 +14,7 @@ def _get_comfyui_server():
 
 class Service:
     @staticmethod
-    async def text2img(client_task_id: int, params: dict) -> ComfyUIRecord:
+    async def text2img(client_task_id: str, params: dict) -> ComfyUIRecord:
         comfyui_server = _get_comfyui_server()
         text = params.get("text")
         prompt_str = TEXT2IMG_COMFYUI_PROMPT_TEMPLATE.substitute(text=text)
@@ -22,7 +22,7 @@ class Service:
         return await comfyui_server.queue_prompt(client_task_id, prompt_json)
 
     @staticmethod
-    async def img2img(client_task_id: int, params: dict) -> ComfyUIRecord:
+    async def img2img(client_task_id: str, params: dict) -> ComfyUIRecord:
         comfyui_server = _get_comfyui_server()
         text = params.get("text")
         image_base64 = params.get("image")
