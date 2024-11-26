@@ -51,7 +51,6 @@ make sure your comfyUI has already installed this custom node.
 cd ComfyUI-server
 poetry install
 poetry shell
-pip install -r requirements.txt
 cd src
 python main.py
 ```
